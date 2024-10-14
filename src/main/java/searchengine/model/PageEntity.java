@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "page", indexes = @Index(columnList = "path", name = "path_index", unique = true))
-public class Page {
+public class PageEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
