@@ -2,12 +2,22 @@
 
 indexing-settings:
   sites:
-    - url: https://www.lenta.ru
-      name: Лента.ру
-    - url: https://www.skillbox.ru
-      name: Skillbox
-    - url: https://www.playback.ru
-      name: PlayBack.Ru
+    - url: https://sendel.ru
+      name: sendel.ru
+#    - url: https://lenta.ru
+#      name: Лента.ру
+#    - url: https://skillbox.ru
+#      name: Skillbox
+#    - url: https://playback.ru
+#      name: PlayBack.Ru
+#    - url: https://volochek.life
+#      name: Вышний Волочёк
+#    - url: https://www.radiomv.ru
+#      name: Милицейская волна
+#    - url: https://www.lutherancathedral.ru
+#      name: LutheranCathedral.ru
+#    - url: https://dimonvideo.ru
+#      name: DimonVideo##
 
 server:
   port: 8080
@@ -19,5 +29,11 @@ spring:
     url: jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSSL=false&allowPublicKeyRetrieval=true
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     show-sql: true
+jsoup-config:
+  user-agent: Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)
+  referrer: https://www.yandex.ru
+  timeout: 3000
+  ignore-content-type: true
+  ignore-http-errors: true
