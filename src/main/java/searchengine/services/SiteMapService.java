@@ -5,10 +5,13 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import searchengine.config.Site;
 import searchengine.model.SiteEntity;
 import searchengine.repositories.SiteRepositories;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -21,6 +24,7 @@ import static java.lang.Thread.sleep;
 @Slf4j
 public class SiteMapService extends RecursiveAction {
 
+    private static Site site;
     private static final Set<Page> allPages = new CopyOnWriteArraySet<>();
     private static final Set<String> allLinks = new CopyOnWriteArraySet<>();
     private final SiteRepositories siteRepositories;
@@ -44,8 +48,10 @@ public class SiteMapService extends RecursiveAction {
 
             for (Element link : links) {
                 Page page = new Page();
+                URL url = new URL(siteEntity.getUrl());
+                String hostUrl = url.getHost();
                 String currentUrl = link.attr("abs:href");
-                if (currentUrl.startsWith(url)
+                if (currentUrl.contains(hostUrl)
                         && !isFile(currentUrl)
                         && !currentUrl.contains("#")
                         && !allLinks.contains(currentUrl)) {
