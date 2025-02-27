@@ -5,14 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
-import searchengine.dto.indexingresponse.IndexingResponse;
+import searchengine.dto.entity.Page;
+import searchengine.dto.indexing.IndexingResponse;
 import searchengine.model.PageEntity;
 import searchengine.model.SiteEntity;
 import searchengine.model.StatusType;
-import searchengine.repositories.PageRepositories;
-import searchengine.repositories.SiteRepositories;
+import searchengine.repository.PageRepository;
+import searchengine.repository.SiteRepository;
+import searchengine.services.parsing.SiteMap;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -22,37 +23,52 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class IndexingServiceImpl implements IndexingService {
 
-    private ForkJoinPool forkJoinPool;
-    private final PageRepositories pageRepositories;
-    private final SiteRepositories siteRepositories;
+    private final PageRepository pageRepository;
+    private final SiteRepository siteRepository;
     private final SitesList sites;
     private final Object lock = new Object();
-    private boolean startIndexing; // = false
+    private ForkJoinPool forkJoinPool;
+    private List<Thread> indexingThreads;
 
     @Override
-    public IndexingResponse startIndexing() throws IOException {
+    public IndexingResponse startIndexing() {
         synchronized (lock) {
             if (forkJoinPool != null && !forkJoinPool.isTerminated()) {
-                return new IndexingResponse(false, "Индексирование уже выполняется.");
+                return new IndexingResponse(false, "Индексация уже запущена");
             }
             initThreadPool();
         }
-        new Thread(this::startIndexingInternal).start();
+        new Thread(this::indexSite).start();
         return new IndexingResponse(true);
     }
 
+    @Override
+    public IndexingResponse stopIndexing() {
+        try {
+            if (forkJoinPool == null) {
+                log.info("Indexing is not running");
+                return new IndexingResponse(false, "Индексация не запущена");
+            }
+            indexingThreads.forEach(Thread::interrupt);
+            forkJoinPool.shutdownNow();
+            log.info("Indexing stopped");
+            return new IndexingResponse(true);
+        } catch (Exception ex) {
+            log.error(ex.getMessage());
+            return new IndexingResponse(false, "Ошибка при остановке индексации");
+        }
+    }
 
-    private void startIndexingInternal() {
+    private void indexSite() {
         try {
             saveSitesInDB();
-            List<Thread> indexingThreads = new ArrayList<>();
-            for (SiteEntity siteEntity : siteRepositories.findAll()) {
+            indexingThreads = new ArrayList<>();
+            for (SiteEntity siteEntity : siteRepository.findAll()) {
                 Thread indexingThread = new Thread(() -> indexPage(siteEntity));
                 indexingThreads.add(indexingThread);
                 indexingThread.start();
@@ -62,13 +78,19 @@ public class IndexingServiceImpl implements IndexingService {
             }
         } catch (InterruptedException e) {
             log.error(e.getMessage());
+        } finally {
+            synchronized (lock) {
+                forkJoinPool.shutdownNow();
+                forkJoinPool = null;
+                log.info("Indexing finished");
+            }
         }
     }
 
     private void indexPage(SiteEntity siteEntity) {
-        SiteMapService siteMapService = new SiteMapService(siteEntity.getUrl(), siteRepositories, siteEntity);
-        forkJoinPool.invoke(siteMapService);
-        Set<Page> pages = new CopyOnWriteArraySet<>(siteMapService.getPages());
+        SiteMap siteMap = new SiteMap(siteEntity.getUrl(), siteRepository, siteEntity);
+        forkJoinPool.invoke(siteMap);
+        Set<Page> pages = new CopyOnWriteArraySet<>(siteMap.getPages());
         Set<PageEntity> pageEntities = pages.stream()
                 .filter(page -> page.getPath().startsWith(siteEntity.getUrl()))
                 .map(page -> createPage(page, siteEntity))
@@ -79,7 +101,8 @@ public class IndexingServiceImpl implements IndexingService {
     private void processAndSavePages(Set<PageEntity> pageEntities, SiteEntity siteEntity) {
         savePageInDB(pageEntities);
         siteEntity.setStatus(StatusType.INDEXED);
-        siteRepositories.save(siteEntity);
+        siteRepository.save(siteEntity);
+        log.info("Pages saved in DB: {}", pageEntities.size());
     }
 
     private PageEntity createPage(Page page, SiteEntity siteEntity) {
@@ -96,16 +119,16 @@ public class IndexingServiceImpl implements IndexingService {
         siteList.forEach(site -> {
             checkDuplicateInDB(site);
             SiteEntity siteEntity = createSite(site);
-            siteRepositories.save(siteEntity);
+            siteRepository.save(siteEntity);
             log.info("Site save in DB: {}", site.getUrl());
         });
     }
 
     private void savePageInDB(Set<PageEntity> pageEntities) {
-        pageRepositories.saveAll(pageEntities);
+        pageRepository.saveAll(pageEntities);
     }
 
-    private SiteEntity createSite (Site site) {
+    private SiteEntity createSite(Site site) {
         SiteEntity siteEntity = new SiteEntity();
         siteEntity.setUrl(site.getUrl());
         siteEntity.setName(site.getName());
@@ -115,18 +138,14 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void checkDuplicateInDB(Site site) {
-        if (siteRepositories.findByUrl(site.getUrl()) != null) {
-            deleteSite(siteRepositories.deleteByUrl(site.getUrl()));
+        if (siteRepository.findByUrl(site.getUrl()) != null) {
+            log.info("Site already exists in DB: {}", site.getUrl());
+            siteRepository.deleteByUrl(site.getUrl());
+            log.info("Site deleted from DB: {}", site.getUrl());
         }
-    }
-
-    private void deleteSite(SiteEntity url) {
-        siteRepositories.deleteByUrl(url.getUrl());
     }
 
     private void initThreadPool() {
         forkJoinPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
     }
-
 }
-

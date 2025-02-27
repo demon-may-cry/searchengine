@@ -1,50 +1,56 @@
-package searchengine.services;
+package searchengine.services.parsing;
 
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import searchengine.config.Site;
+import searchengine.dto.entity.Page;
 import searchengine.model.SiteEntity;
-import searchengine.repositories.SiteRepositories;
+import searchengine.model.StatusType;
+import searchengine.repository.SiteRepository;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URL;
 import java.time.Instant;
-import java.util.*;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.RecursiveAction;
 
 import static java.lang.Thread.sleep;
 
-
 @Slf4j
-public class SiteMapService extends RecursiveAction {
+public class SiteMap extends RecursiveAction {
+    private static final String USER_AGENT = "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)";
+    private static final String REFERRER = "https://www.yandex.ru";
+    private static final boolean IGNORE_CONTENT_TYPE = true;
+    private static final boolean IGNORE_HTTP_ERRORS = true;
 
-    private static Site site;
     private static final Set<Page> allPages = new CopyOnWriteArraySet<>();
     private static final Set<String> allLinks = new CopyOnWriteArraySet<>();
-    private final SiteRepositories siteRepositories;
+    private final SiteRepository siteRepository;
     private final SiteEntity siteEntity;
     private final String url;
 
-    public SiteMapService(String url, SiteRepositories siteRepositories, SiteEntity siteEntity) {
+    public SiteMap(String url, SiteRepository siteRepository, SiteEntity siteEntity) {
         this.url = url;
-        this.siteRepositories = siteRepositories;
+        this.siteRepository = siteRepository;
         this.siteEntity = siteEntity;
     }
 
     @Override
     protected void compute() {
         try {
-            sleep(300);
+
+            sleep(500);
             Document document = connection(url);
 
             Elements links = document.select("a[href]");
-            List<SiteMapService> allTasks = new CopyOnWriteArrayList<>();
+            List<SiteMap> allTasks = new CopyOnWriteArrayList<>();
 
             for (Element link : links) {
                 Page page = new Page();
@@ -68,24 +74,32 @@ public class SiteMapService extends RecursiveAction {
 
                     setSiteEntityStatusTime();
 
-                    SiteMapService subTask = new SiteMapService(currentUrl, siteRepositories, siteEntity);
+                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, siteEntity);
                     allTasks.add(subTask);
                 }
             }
             invokeAll(allTasks);
-        } catch (InterruptedException | IOException e) {
-            log.error(e.getMessage());
+        } catch (InterruptedException | IOException ex) {
+            setSiteEntityError(ex.getMessage());
+            log.error(ex.getMessage());
         }
     }
 
     private void setSiteEntityStatusTime() {
         siteEntity.setStatusTime(Date.from(Instant.now()));
-        siteRepositories.save(siteEntity);
+        siteRepository.save(siteEntity);
+    }
+
+    private void setSiteEntityError(String error) {
+        siteEntity.setLastError(error);
+        siteEntity.setStatus(StatusType.FAILED);
+        siteRepository.save(siteEntity);
     }
 
     public Set<Page> getPages() {
         return new HashSet<>(allPages);
     }
+
     private boolean isFile(String link) {
         return link.toLowerCase().contains(".jpg")
                 || link.contains(".jpeg")
@@ -105,10 +119,10 @@ public class SiteMapService extends RecursiveAction {
 
     private Document connection(String url) throws IOException {
         return Jsoup.connect(url)
-                .userAgent("Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)")
-                .referrer("https://www.yandex.ru")
-                .ignoreContentType(true)
-                .ignoreHttpErrors(true)
+                .userAgent(USER_AGENT)
+                .referrer(REFERRER)
+                .ignoreContentType(IGNORE_CONTENT_TYPE)
+                .ignoreHttpErrors(IGNORE_HTTP_ERRORS)
                 .get();
     }
 }

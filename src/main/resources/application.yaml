@@ -6,8 +6,8 @@ indexing-settings:
       name: sendel.ru
 #    - url: https://lenta.ru
 #      name: Лента.ру
-#    - url: https://skillbox.ru
-#      name: Skillbox
+    - url: https://skillbox.ru
+      name: Skillbox
 #    - url: https://playback.ru
 #      name: PlayBack.Ru
 #    - url: https://volochek.life
@@ -31,9 +31,6 @@ spring:
     hibernate:
       ddl-auto: create
     show-sql: true
-jsoup-config:
-  user-agent: Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)
-  referrer: https://www.yandex.ru
-  timeout: 3000
-  ignore-content-type: true
-  ignore-http-errors: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
