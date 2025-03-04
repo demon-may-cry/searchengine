@@ -60,4 +60,7 @@ public class SiteEntity {
 
     @OneToMany(mappedBy = "siteId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<PageEntity> pages;
+
+    @OneToMany(mappedBy = "siteId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<LemmaEntity> lemmas;
 }

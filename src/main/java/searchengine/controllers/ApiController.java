@@ -1,15 +1,14 @@
 package searchengine.controllers;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import searchengine.dto.indexing.IndexingResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.services.IndexingService;
 import searchengine.services.StatisticsService;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 
 @RestController
 @RequestMapping("/api")
@@ -71,7 +70,7 @@ public class ApiController {
      *
      * @return true
      */
-    @GetMapping("/startindexing")
+    @GetMapping("/startIndexing")
     public ResponseEntity<IndexingResponse> startIndexing() throws IOException {
         return ResponseEntity.ok(indexingService.startIndexing());
     }
@@ -85,8 +84,21 @@ public class ApiController {
      *
      * @return true
      */
-    @GetMapping("/stopindexing")
+    @GetMapping("/stopIndexing")
     public ResponseEntity<IndexingResponse> stopIndexing() {
         return ResponseEntity.ok(indexingService.stopIndexing());
+    }
+
+    /**
+     * Метод добавляет в индекс или обновляет отдельную страницу, адрес
+     * которой передан в параметре.
+     * Если адрес страницы передан неверно, метод должен вернуть
+     * соответствующую ошибку.
+     * @param url адрес страницы, которую нужно переиндексировать
+     * @return true
+     */
+    @PostMapping("/indexPage")
+    public ResponseEntity<IndexingResponse> indexPage(@RequestParam String url) throws MalformedURLException {
+        return ResponseEntity.ok(indexingService.indexPage(url));
     }
 }

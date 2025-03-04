@@ -35,33 +35,33 @@ public class SiteMap extends RecursiveAction {
     private final SiteRepository siteRepository;
     private final SiteEntity siteEntity;
     private final String url;
+    private final boolean isSinglePage;
 
-    public SiteMap(String url, SiteRepository siteRepository, SiteEntity siteEntity) {
+    public SiteMap(String url, SiteRepository siteRepository, SiteEntity siteEntity, boolean isSinglePage) {
         this.url = url;
         this.siteRepository = siteRepository;
         this.siteEntity = siteEntity;
+        this.isSinglePage = isSinglePage;
     }
 
     @Override
     protected void compute() {
         try {
-
             sleep(500);
             Document document = connection(url);
-
             Elements links = document.select("a[href]");
+
             List<SiteMap> allTasks = new CopyOnWriteArrayList<>();
 
+            String uri = isSinglePage ? url : siteEntity.getUrl();
             for (Element link : links) {
                 Page page = new Page();
-                URL url = new URL(siteEntity.getUrl());
-                String hostUrl = url.getHost();
                 String currentUrl = link.attr("abs:href");
-                if (currentUrl.contains(hostUrl)
+                if (currentUrl.contains(uri)
                         && !isFile(currentUrl)
                         && !currentUrl.contains("#")
                         && !allLinks.contains(currentUrl)) {
-                    log.info(currentUrl);
+                    log.info("Current URL: {}", currentUrl);
 
                     Document documentChild = connection(currentUrl);
 
@@ -74,13 +74,13 @@ public class SiteMap extends RecursiveAction {
 
                     setSiteEntityStatusTime();
 
-                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, siteEntity);
+                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, siteEntity, isSinglePage);
                     allTasks.add(subTask);
                 }
             }
             invokeAll(allTasks);
         } catch (InterruptedException | IOException ex) {
-            setSiteEntityError(ex.getMessage());
+            setSiteEntityLastError(ex.getMessage());
             log.error(ex.getMessage());
         }
     }
@@ -90,7 +90,7 @@ public class SiteMap extends RecursiveAction {
         siteRepository.save(siteEntity);
     }
 
-    private void setSiteEntityError(String error) {
+    private void setSiteEntityLastError(String error) {
         siteEntity.setLastError(error);
         siteEntity.setStatus(StatusType.FAILED);
         siteRepository.save(siteEntity);

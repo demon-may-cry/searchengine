@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 /**
  * Page — проиндексированные страницы сайта
  */
@@ -20,7 +22,7 @@ public class PageEntity {
     /**
      * ID веб-сайта из таблицы site
      */
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "site_id", columnDefinition = "INT", nullable = false)
     private SiteEntity siteId;
 
@@ -42,4 +44,7 @@ public class PageEntity {
      */
     @Column(name = "content", columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
+
+    @OneToMany(mappedBy = "pageId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<IndexEntity> indexPages;
 }
