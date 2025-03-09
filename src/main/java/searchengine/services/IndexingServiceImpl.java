@@ -7,20 +7,21 @@ import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.entity.Page;
 import searchengine.dto.indexing.IndexingResponse;
-import searchengine.model.PageEntity;
-import searchengine.model.SiteEntity;
-import searchengine.model.StatusType;
+import searchengine.model.*;
+import searchengine.repository.IndexRepository;
+import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.services.morphology.LemmaMorphology;
+import searchengine.services.morphology.LemmaMorphologyImpl;
 import searchengine.services.parsing.SiteMap;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
@@ -32,6 +33,9 @@ public class IndexingServiceImpl implements IndexingService {
 
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
+    private final LemmaRepository lemmaRepository;
+    private final IndexRepository indexRepository;
+    private final LemmaMorphologyImpl lemmaMorphology;
     private final SitesList sites;
     private final Object lock = new Object();
     private ForkJoinPool forkJoinPool;
@@ -57,7 +61,7 @@ public class IndexingServiceImpl implements IndexingService {
                 return new IndexingResponse(false, "Индексация не запущена");
             }
             indexingThreads.forEach(Thread::interrupt);
-            forkJoinPool.shutdownNow();
+            forkJoinPool.shutdownNow(); //TODO: shutdown thread
             log.info("Indexing stopped");
             return new IndexingResponse(true);
         } catch (Exception ex) {
@@ -97,7 +101,7 @@ public class IndexingServiceImpl implements IndexingService {
                 indexingThreads.add(indexingThread);
                 indexingThread.start();
             }
-            for (Thread thread : indexingThreads) {
+            for (var thread : indexingThreads) {
                 thread.join();
             }
         } catch (InterruptedException e) {
@@ -155,7 +159,7 @@ public class IndexingServiceImpl implements IndexingService {
     private SiteEntity createSingleSite(String url) throws MalformedURLException {
         String nameSite = null;
         List<Site> siteList = sites.getSites();
-        for (Site site : siteList) {
+        for (var site : siteList) {
             if (site.getUrl().contains(getHostName(url))) {
                 nameSite = site.getName();
                 break;
@@ -203,9 +207,58 @@ public class IndexingServiceImpl implements IndexingService {
 
     protected void processAndSavePages(Set<PageEntity> pageEntities, SiteEntity siteEntity) {
         savePageInDB(pageEntities);
+        if (pageEntities.size() > 1) {
+            saveLemmaAndIndexSite(siteEntity);
+        } else {
+            pageEntities.forEach(this::saveLemmaAndIndexPage);
+        }
         siteEntity.setStatus(StatusType.INDEXED);
         siteRepository.save(siteEntity);
         log.info("Pages saved in DB: {}", pageEntities.size());
+    }
+
+    private void saveLemmaAndIndexPage(PageEntity pageEntity) {
+        Map<String, LemmaEntity> lemmaEntityMap = new HashMap<>();
+        List<IndexEntity> indexEntityList = new ArrayList<>();
+        processLemmasAndIndexes(pageEntity, lemmaEntityMap, indexEntityList);
+        lemmaRepository.saveAll(lemmaEntityMap.values());
+        indexRepository.saveAll(indexEntityList);
+    }
+
+    private void saveLemmaAndIndexSite(SiteEntity siteEntity) {
+        Map<String, LemmaEntity> lemmaEntityMap = new ConcurrentHashMap<>();
+        List<IndexEntity> indexEntityList = new CopyOnWriteArrayList<>();
+        pageRepository.findAllBySiteId(siteEntity).stream()
+                .filter(pageEntity -> pageEntity.getCode() == 200)
+                .forEach(pageEntity -> processLemmasAndIndexes(pageEntity, lemmaEntityMap, indexEntityList));
+        lemmaRepository.saveAll(lemmaEntityMap.values());
+        indexRepository.saveAll(indexEntityList);
+    }
+
+    private void processLemmasAndIndexes(PageEntity pageEntity,
+                                         Map<String, LemmaEntity> lemmaEntityMap,
+                                         List<IndexEntity> indexEntityList) {
+        if (pageEntity.getCode() == 200) {
+            String content = pageEntity.getContent();
+            Map<String, Integer> lemmas = lemmaMorphology.collectLemmas(content, pageEntity);
+            lemmas.forEach((lemma, count) -> {
+                LemmaEntity lemmaEntity = lemmaEntityMap.get(lemma);
+                if (lemmaEntity == null) {
+                    LemmaEntity newLemmaEntity = new LemmaEntity();
+                    newLemmaEntity.setLemma(lemma);
+                    newLemmaEntity.setSiteId(pageEntity.getSiteId());
+                    newLemmaEntity.setFrequency(1);
+                    lemmaEntityMap.put(lemma, newLemmaEntity);
+                } else {
+                    lemmaEntity.setFrequency(lemmaEntity.getFrequency() + 1);
+                }
+                IndexEntity indexEntity = new IndexEntity();
+                indexEntity.setPageId(pageEntity);
+                indexEntity.setLemmaId(lemmaEntityMap.get(lemma));
+                indexEntity.setRank(count);
+                indexEntityList.add(indexEntity);
+            });
+        }
     }
 
     /**
@@ -235,7 +288,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private boolean isValidUrl(String url) throws MalformedURLException {
-        for (Site site : sites.getSites()) {
+        for (var site : sites.getSites()) {
             if (site.getUrl().contains(getHostName(url))) {
                 return true;
             }

@@ -54,7 +54,7 @@ public class SiteMap extends RecursiveAction {
             List<SiteMap> allTasks = new CopyOnWriteArrayList<>();
 
             String uri = isSinglePage ? url : siteEntity.getUrl();
-            for (Element link : links) {
+            for (var link : links) {
                 Page page = new Page();
                 String currentUrl = link.attr("abs:href");
                 if (currentUrl.contains(uri)
@@ -114,6 +114,9 @@ public class SiteMap extends RecursiveAction {
                 || link.contains(".docx")
                 || link.contains(".sql")
                 || link.contains(".yaml")
+                || link.contains(".zip")
+                || link.contains(".7z")
+                || link.contains(".rar")
                 || link.contains("?_ga");
     }
 
