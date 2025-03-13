@@ -3,7 +3,6 @@ package searchengine.services.morphology;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.springframework.stereotype.Component;
-import searchengine.model.PageEntity;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -33,12 +32,12 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
      * @return HashMap<>
      */
     @Override
-    public HashMap<String, Integer> collectLemmas(String content, PageEntity page) {
+    public HashMap<String, Integer> collectLemmas(String content) {
         content = content.toLowerCase(Locale.ROOT).replaceAll(REGEX, " ");
         HashMap<String, Integer> lemmasMap = new HashMap<>();
         String[] lemmas = content.toLowerCase(Locale.ROOT).split("\\s+");
         for (var l : lemmas) {
-            List<String> words = getLemma(l, page);
+            List<String> words = getLemma(l);
             for (var s : words) {
                 lemmasMap.put(s, lemmasMap.getOrDefault(s, 0) + 1);
             }
@@ -54,7 +53,7 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
      * @return List<>
      */
     @Override
-    public List<String> getLemma(String lemma, PageEntity page) {
+    public List<String> getLemma(String lemma) {
         List<String> lemmaList = new ArrayList<>();
         try {
             if (!lemma.isEmpty()) {
@@ -64,7 +63,7 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
                 }
             }
         } catch (Exception ex) {
-            log.error("{} in page {}", ex.getMessage(), page.getId()); //TODO: Symbol ️ is not small cirillic letter in page 2
+            log.error("{}", ex.getMessage()); //TODO: Symbol ️ is not small cirillic letter in page 2
         }
         return lemmaList;
     }

@@ -240,7 +240,7 @@ public class IndexingServiceImpl implements IndexingService {
                                          List<IndexEntity> indexEntityList) {
         if (pageEntity.getCode() == 200) {
             String content = pageEntity.getContent();
-            Map<String, Integer> lemmas = lemmaMorphology.collectLemmas(content, pageEntity);
+            Map<String, Integer> lemmas = lemmaMorphology.collectLemmas(content);
             lemmas.forEach((lemma, count) -> {
                 LemmaEntity lemmaEntity = lemmaEntityMap.get(lemma);
                 if (lemmaEntity == null) {

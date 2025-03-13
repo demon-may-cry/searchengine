@@ -2,12 +2,12 @@
 
 indexing-settings:
   sites:
-    - url: https://sendel.ru
-      name: Konstantin Shibkov
+#    - url: https://sendel.ru
+#      name: Konstantin Shibkov
 #    - url: https://lenta.ru
 #      name: Лента.ру
-    - url: https://skillbox.ru
-      name: Skillbox – образовательная платформа с онлайн-курсами
+#    - url: https://skillbox.ru
+#      name: Skillbox – образовательная платформа с онлайн-курсами
     - url: https://playback.ru
       name: Интернет-магазин PlayBack.ru
     - url: https://rostov.store123.ru
