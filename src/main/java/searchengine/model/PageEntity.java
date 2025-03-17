@@ -17,7 +17,7 @@ public class PageEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private int id;
 
     /**
      * ID веб-сайта из таблицы site

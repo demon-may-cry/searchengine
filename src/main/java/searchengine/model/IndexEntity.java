@@ -17,7 +17,7 @@ public class IndexEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private int id;
 
     /**
      * Идентификатор страницы

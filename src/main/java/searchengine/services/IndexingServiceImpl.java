@@ -2,6 +2,7 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
@@ -12,7 +13,6 @@ import searchengine.repository.IndexRepository;
 import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
-import searchengine.services.morphology.LemmaMorphology;
 import searchengine.services.morphology.LemmaMorphologyImpl;
 import searchengine.services.parsing.SiteMap;
 
@@ -20,10 +20,9 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -31,6 +30,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IndexingServiceImpl implements IndexingService {
 
+    private static final int BATCH_SIZE = 1000;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
     private final LemmaRepository lemmaRepository;
@@ -74,20 +74,30 @@ public class IndexingServiceImpl implements IndexingService {
     public IndexingResponse indexPage(String page) throws MalformedURLException {
         synchronized (lock) {
             SiteEntity siteEntity = siteRepository.findByUrl(getHostName(page));
+            PageEntity pageEntity = pageRepository.findByPath(page);
+
             if (forkJoinPool != null && !forkJoinPool.isTerminated()) {
                 log.info("Indexing is running");
                 return new IndexingResponse(false, "Индексация уже запущена");
             }
+
             if (!isValidUrl(page)) {
-                return new IndexingResponse(false, "Данная страница находится за пределами сайтов, указанных в конфигурационном файле");
+                return new IndexingResponse(false, "Данная страница находится за пределами сайтов, " +
+                        "указанных в конфигурационном файле");
             }
-            deletePage(page);
+
+            if (pageEntity != null) {
+                deletePage(pageEntity);
+            }
+
             if (siteEntity == null) {
                 siteEntity = createSingleSite(page);
             }
+
             initThreadPool();
             SiteEntity finalSite = siteEntity;
-            new Thread(() -> indexSinglePage(finalSite, page)).start(); //TODO: save page when first added
+            //new Thread(() -> indexSinglePage(finalSite, page)).start(); //TODO: save page when first added
+            forkJoinPool.submit(() -> indexSinglePage(finalSite, page));
             return new IndexingResponse(true);
         }
     }
@@ -201,11 +211,25 @@ public class IndexingServiceImpl implements IndexingService {
      *
      * @param pageEntities таблица страниц в базе данных
      */
-    private void savePageInDB(Set<PageEntity> pageEntities) {
-        pageRepository.saveAll(pageEntities);
+    protected void savePageInDB(Set<PageEntity> pageEntities) {
+        try {
+            int batchSize = 100; // Пример: сохраняем страницы партиями по 100 штук
+            int totalPages = pageEntities.size();
+            List<PageEntity> pageList = new ArrayList<>(pageEntities);
+
+            for (int i = 0; i < totalPages; i += batchSize) {
+                int end = Math.min(i + batchSize, totalPages);
+                pageRepository.saveAll(pageList.subList(i, end));
+            }
+
+            log.info("Successfully saved {} pages in DB.", totalPages);
+        } catch (Exception e) {
+            log.error("Error saving pages to DB: {}", e.getMessage());
+            throw new RuntimeException("Failed to save pages to DB", e); // Бросаем ошибку после логирования
+        }
     }
 
-    protected void processAndSavePages(Set<PageEntity> pageEntities, SiteEntity siteEntity) {
+    private void processAndSavePages(Set<PageEntity> pageEntities, SiteEntity siteEntity) {
         savePageInDB(pageEntities);
         if (pageEntities.size() > 1) {
             saveLemmaAndIndexSite(siteEntity);
@@ -217,24 +241,56 @@ public class IndexingServiceImpl implements IndexingService {
         log.info("Pages saved in DB: {}", pageEntities.size());
     }
 
+    /**
+     * Метод обрабатывает одну страницу, извлекает леммы и индексные записи,
+     * а затем сохраняет их в базу данных
+     *
+     * @param pageEntity страница сайта
+     */
     private void saveLemmaAndIndexPage(PageEntity pageEntity) {
+        if (pageEntity.getCode() != 200) {
+            return;
+        }
+
+        Map<String, LemmaEntity> lemmaEntityMap = loadExistingLemmas(pageEntity.getSiteId());
+        List<IndexEntity> indexEntityList = new ArrayList<>();
+
+        processLemmasAndIndexes(pageEntity, lemmaEntityMap, indexEntityList);
+
+        if (!lemmaEntityMap.isEmpty()) {
+            batchSave(new ArrayList<>(lemmaEntityMap.values()), lemmaRepository);
+        }
+
+        if (!indexEntityList.isEmpty()) {
+            batchSave(indexEntityList, indexRepository);
+        }
+    }
+
+    /**
+     * Метод выполняет индексацию всех страниц сайта, извлекает леммы,
+     * создает индексные записи и сохраняет их в базе данных
+     *
+     * @param siteEntity сайт
+     */
+    private void saveLemmaAndIndexSite(SiteEntity siteEntity) {
         Map<String, LemmaEntity> lemmaEntityMap = new HashMap<>();
         List<IndexEntity> indexEntityList = new ArrayList<>();
-        processLemmasAndIndexes(pageEntity, lemmaEntityMap, indexEntityList);
-        lemmaRepository.saveAll(lemmaEntityMap.values());
-        indexRepository.saveAll(indexEntityList);
-    }
 
-    private void saveLemmaAndIndexSite(SiteEntity siteEntity) {
-        Map<String, LemmaEntity> lemmaEntityMap = new ConcurrentHashMap<>();
-        List<IndexEntity> indexEntityList = new CopyOnWriteArrayList<>();
-        pageRepository.findAllBySiteId(siteEntity).stream()
+        pageRepository.findAllBySiteId(siteEntity).parallelStream()
                 .filter(pageEntity -> pageEntity.getCode() == 200)
                 .forEach(pageEntity -> processLemmasAndIndexes(pageEntity, lemmaEntityMap, indexEntityList));
-        lemmaRepository.saveAll(lemmaEntityMap.values());
-        indexRepository.saveAll(indexEntityList);
+
+        batchSave(new ArrayList<>(lemmaEntityMap.values()), lemmaRepository);
+        batchSave(indexEntityList, indexRepository);
     }
 
+    /**
+     * Анализ содержимого страницы, извлечение леммы и обновление связанных сущностей LemmaEntity и IndexEntity
+     *
+     * @param pageEntity      страница сайта
+     * @param lemmaEntityMap  коллекция лемм
+     * @param indexEntityList список индексов
+     */
     private void processLemmasAndIndexes(PageEntity pageEntity,
                                          Map<String, LemmaEntity> lemmaEntityMap,
                                          List<IndexEntity> indexEntityList) {
@@ -275,21 +331,43 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     /**
-     * Проверка адреса страницы в базе данных, если такая страница уже существует в базе данных, то происходит её удаление
+     * Проверка адреса страницы в базе данных, если такая страница уже существует в базе данных,
+     * то происходит её удаление
+     *
      * @param page адрес страницы
      */
-    private void deletePage(String page) throws MalformedURLException {
-        PageEntity pageEntity = pageRepository.findByPath(getPathAddress(page));
-        if (pageEntity != null) {
-            log.info("Page already exists in DB: {}", pageEntity.getPath());
-            pageRepository.delete(pageEntity);
-            log.info("Page deleted from DB: {}", pageEntity.getPath());
-        }
+    private void deletePage(PageEntity page) {
+        List<IndexEntity> indexTables = indexRepository.findAllByPageId(page);
+
+        List<LemmaEntity> lemmaTables = indexTables.stream().map(IndexEntity::getLemmaId).toList();
+
+        indexTables.forEach(indexTable -> indexRepository.deleteByPageId(page));
+
+        lemmaTables.forEach(lemmaTable -> {
+            Optional<LemmaEntity> optionalLemma = lemmaRepository.findById(lemmaTable.getId());
+            optionalLemma.ifPresent(lemma -> {
+                int newFrequency = lemma.getFrequency() - 1;
+                if (newFrequency <= 0) {
+                    lemmaRepository.delete(lemma);
+                } else {
+                    lemma.setFrequency(newFrequency);
+                    lemmaRepository.save(lemma);
+                }
+            });
+        });
+
+        pageRepository.deleteById(page.getId());
     }
 
+    /**
+     * Метод проверяет, содержится ли хост переданного URL в списке сайтов
+     *
+     * @param url URL-адрес сайта
+     * @return boolean
+     */
     private boolean isValidUrl(String url) throws MalformedURLException {
         for (var site : sites.getSites()) {
-            if (site.getUrl().contains(getHostName(url))) {
+            if (site.getUrl().equals(getHostName(url))) {
                 return true;
             }
         }
@@ -319,21 +397,50 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     /**
-     * Создает пул потоков по количеству процессоров
+     * Инициализирует пул потоков ForkJoinPool, используя количество доступных процессоров
      */
     private void initThreadPool() {
         forkJoinPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
     }
 
     /**
-     * Остановка всех активно выполняемых задач и очистка FJP после парсинга страницы
+     * Остановка всех активно выполняемых задач и очистка ForkJoinPool после парсинга страницы
      */
     private void cleanupAfterParsing() {
         synchronized (lock) {
             if (forkJoinPool != null) {
-                forkJoinPool.shutdownNow();
+                forkJoinPool.shutdown();
+                try {
+                    if (!forkJoinPool.awaitTermination(10, TimeUnit.SECONDS)) {
+                        forkJoinPool.shutdownNow();
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    forkJoinPool.shutdownNow();
+                }
                 forkJoinPool = null;
             }
+        }
+    }
+
+    /**
+     * Загрузка существующих лемм из БД по идентификатору сайта
+     *
+     * @param siteId идентификатор сайта
+     * @return <a href="">lemma1:10, lemma2:20...</a>
+     **/
+    private Map<String, LemmaEntity> loadExistingLemmas(SiteEntity siteId) {
+        return lemmaRepository.findBySiteId(siteId).stream()
+                .collect(Collectors.toMap(LemmaEntity::getLemma, lemma -> lemma));
+    }
+
+    /**
+     * Сохранение данных в БД порциями
+     */
+    private <T> void batchSave(List<T> entities, JpaRepository<T, ?> repository) {
+        for (int i = 0; i < entities.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, entities.size());
+            repository.saveAll(entities.subList(i, end));
         }
     }
 }

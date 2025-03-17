@@ -19,7 +19,7 @@ public class SiteEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    private int id;
 
     /**
      * Текущий статус полной индексации сайта, отражающий готовность поискового
