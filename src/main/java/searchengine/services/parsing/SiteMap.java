@@ -3,15 +3,14 @@ package searchengine.services.parsing;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import searchengine.dto.entity.Page;
 import searchengine.model.SiteEntity;
 import searchengine.model.StatusType;
+import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
 import java.io.IOException;
-import java.net.URL;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashSet;
@@ -30,16 +29,24 @@ public class SiteMap extends RecursiveAction {
     private static final boolean IGNORE_CONTENT_TYPE = true;
     private static final boolean IGNORE_HTTP_ERRORS = true;
 
+    private static final Set<String> FILE_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".eps",
+            ".xlsx", ".doc", ".pptx", ".docx", ".sql", ".yaml",
+            ".zip", ".7z", ".rar"
+    );
+
     private static final Set<Page> allPages = new CopyOnWriteArraySet<>();
     private static final Set<String> allLinks = new CopyOnWriteArraySet<>();
     private final SiteRepository siteRepository;
+    private final PageRepository pageRepository;
     private final SiteEntity siteEntity;
     private final String url;
     private final boolean isSinglePage;
 
-    public SiteMap(String url, SiteRepository siteRepository, SiteEntity siteEntity, boolean isSinglePage) {
+    public SiteMap(String url, SiteRepository siteRepository, PageRepository pageRepository, SiteEntity siteEntity, boolean isSinglePage) {
         this.url = url;
         this.siteRepository = siteRepository;
+        this.pageRepository = pageRepository;
         this.siteEntity = siteEntity;
         this.isSinglePage = isSinglePage;
     }
@@ -74,7 +81,7 @@ public class SiteMap extends RecursiveAction {
 
                     setSiteEntityStatusTime();
 
-                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, siteEntity, isSinglePage);
+                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, pageRepository, siteEntity, isSinglePage);
                     allTasks.add(subTask);
                 }
             }
@@ -101,23 +108,7 @@ public class SiteMap extends RecursiveAction {
     }
 
     private boolean isFile(String link) {
-        return link.toLowerCase().contains(".jpg")
-                || link.contains(".jpeg")
-                || link.contains(".png")
-                || link.contains(".gif")
-                || link.contains(".webp")
-                || link.contains(".pdf")
-                || link.contains(".eps")
-                || link.contains(".xlsx")
-                || link.contains(".doc")
-                || link.contains(".pptx")
-                || link.contains(".docx")
-                || link.contains(".sql")
-                || link.contains(".yaml")
-                || link.contains(".zip")
-                || link.contains(".7z")
-                || link.contains(".rar")
-                || link.contains("?_ga");
+        return FILE_EXTENSIONS.stream().anyMatch(link.toLowerCase()::endsWith) || link.contains("?_ga");
     }
 
     private Document connection(String url) throws IOException {

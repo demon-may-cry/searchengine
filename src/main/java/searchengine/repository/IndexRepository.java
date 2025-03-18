@@ -9,9 +9,9 @@ import searchengine.model.PageEntity;
 import java.util.List;
 
 @Repository
+@Transactional
 public interface IndexRepository extends JpaRepository<IndexEntity, Integer> {
     List<IndexEntity> findAllByPageId(PageEntity pageId);
 
-    @Transactional
     void deleteByPageId(PageEntity pageId);
 }
