@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -59,8 +60,8 @@ public class SiteEntity {
     private String name;
 
     @OneToMany(mappedBy = "siteId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<PageEntity> pages;
+    private List<PageEntity> pages = new ArrayList<>();
 
     @OneToMany(mappedBy = "siteId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<LemmaEntity> lemmas;
+    private List<LemmaEntity> lemmas = new ArrayList<>();
 }

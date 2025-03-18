@@ -2,8 +2,8 @@
 
 indexing-settings:
   sites:
-#    - url: https://sendel.ru
-#      name: Konstantin Shibkov
+    - url: https://sendel.ru
+      name: Konstantin Shibkov
 #    - url: https://lenta.ru
 #      name: Лента.ру
 #    - url: https://skillbox.ru

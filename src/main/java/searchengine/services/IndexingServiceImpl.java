@@ -61,7 +61,7 @@ public class IndexingServiceImpl implements IndexingService {
                 return new IndexingResponse(false, "Индексация не запущена");
             }
             indexingThreads.forEach(Thread::interrupt);
-            forkJoinPool.shutdownNow(); //TODO: shutdown thread
+            forkJoinPool.shutdownNow();
             log.info("Indexing stopped");
             return new IndexingResponse(true);
         } catch (Exception ex) {
@@ -96,7 +96,6 @@ public class IndexingServiceImpl implements IndexingService {
 
             initThreadPool();
             SiteEntity finalSite = siteEntity;
-            //new Thread(() -> indexSinglePage(finalSite, page)).start(); //TODO: save page when first added
             forkJoinPool.submit(() -> indexSinglePage(finalSite, page));
             return new IndexingResponse(true);
         }

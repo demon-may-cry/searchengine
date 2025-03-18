@@ -28,7 +28,6 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
      * Возвращает коллекцию Map лемм и их количество
      *
      * @param content контент страницы (HTML-код)
-     * @param page    страница сайта на котором произошло исключение
      * @return HashMap<>
      */
     @Override
@@ -49,7 +48,6 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
      * Возвращает список лемм
      *
      * @param lemma лемма
-     * @param page  страница сайта на котором произошло исключение
      * @return List<>
      */
     @Override
@@ -63,7 +61,7 @@ public class LemmaMorphologyImpl implements LemmaMorphology {
                 }
             }
         } catch (Exception ex) {
-            log.error("{}", ex.getMessage()); //TODO: Symbol ️ is not small cirillic letter in page 2
+            log.error("{}", ex.getMessage());
         }
         return lemmaList;
     }
