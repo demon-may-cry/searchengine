@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,5 +47,5 @@ public class PageEntity {
     private String content;
 
     @OneToMany(mappedBy = "pageId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<IndexEntity> indexPages;
+    private List<IndexEntity> indexPages = new ArrayList<>();
 }

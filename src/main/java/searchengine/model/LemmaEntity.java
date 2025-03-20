@@ -6,6 +6,7 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,5 +44,5 @@ public class LemmaEntity {
     private int frequency;
 
     @OneToMany(mappedBy = "lemmaId", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    private List<IndexEntity> indexLemmas;
+    private List<IndexEntity> indexLemmas = new ArrayList<>();
 }

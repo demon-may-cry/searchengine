@@ -86,8 +86,8 @@ public class SiteMap extends RecursiveAction {
                 }
             }
             invokeAll(allTasks);
-        } catch (InterruptedException | IOException ex) {
-            setSiteEntityLastError(ex.getMessage());
+        } catch (Exception ex) {
+            setSiteEntityLastError(ex);
             log.error(ex.getMessage());
         }
     }
@@ -97,8 +97,8 @@ public class SiteMap extends RecursiveAction {
         siteRepository.save(siteEntity);
     }
 
-    private void setSiteEntityLastError(String error) {
-        siteEntity.setLastError(error);
+    private void setSiteEntityLastError(Exception exception) {
+        siteEntity.setLastError(exception.getMessage());
         siteEntity.setStatus(StatusType.FAILED);
         siteRepository.save(siteEntity);
     }
