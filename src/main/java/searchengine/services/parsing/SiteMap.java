@@ -38,21 +38,25 @@ public class SiteMap extends RecursiveAction {
     private static final Set<Page> allPages = new CopyOnWriteArraySet<>();
     private static final Set<String> allLinks = new CopyOnWriteArraySet<>();
     private final SiteRepository siteRepository;
-    private final PageRepository pageRepository;
     private final SiteEntity siteEntity;
     private final String url;
     private final boolean isSinglePage;
+    private final boolean isIndexingStopped;
 
-    public SiteMap(String url, SiteRepository siteRepository, PageRepository pageRepository, SiteEntity siteEntity, boolean isSinglePage) {
+    public SiteMap(String url, SiteRepository siteRepository, SiteEntity siteEntity, boolean isSinglePage, boolean isIndexingStopped) {
         this.url = url;
         this.siteRepository = siteRepository;
-        this.pageRepository = pageRepository;
         this.siteEntity = siteEntity;
         this.isSinglePage = isSinglePage;
+        this.isIndexingStopped = isIndexingStopped;
     }
 
     @Override
     protected void compute() {
+        if (isIndexingStopped) {
+            log.info("Indexing has been stopped. Skipping URL: {}", url);
+            return;
+        }
         try {
             sleep(500);
             Document document = connection(url);
@@ -81,7 +85,7 @@ public class SiteMap extends RecursiveAction {
 
                     setSiteEntityStatusTime();
 
-                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, pageRepository, siteEntity, isSinglePage);
+                    SiteMap subTask = new SiteMap(currentUrl, siteRepository, siteEntity, isSinglePage, isIndexingStopped);
                     allTasks.add(subTask);
                 }
             }

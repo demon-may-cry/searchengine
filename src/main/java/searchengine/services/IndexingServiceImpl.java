@@ -40,6 +40,7 @@ public class IndexingServiceImpl implements IndexingService {
     private final Object lock = new Object();
     private final List<Thread> indexingThreads;
     private ForkJoinPool forkJoinPool;
+    private static volatile boolean isIndexingStopped = false;
 
     @Override
     public IndexingResponse startIndexing() {
@@ -55,6 +56,7 @@ public class IndexingServiceImpl implements IndexingService {
 
     @Override
     public IndexingResponse stopIndexing() {
+        isIndexingStopped = true;
         try {
             if (forkJoinPool == null || forkJoinPool.isShutdown()) {
                 log.info("Indexing is not running");
@@ -137,7 +139,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void indexPages(SiteEntity siteEntity) {
-        SiteMap siteMap = new SiteMap(siteEntity.getUrl(), siteRepository, pageRepository, siteEntity, false);
+        SiteMap siteMap = new SiteMap(siteEntity.getUrl(), siteRepository, siteEntity, false, isIndexingStopped);
         forkJoinPool.invoke(siteMap);
         Set<Page> pages = new CopyOnWriteArraySet<>(siteMap.getPages());
         Set<PageEntity> pageEntities = pages.stream()
@@ -155,7 +157,7 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void indexSinglePage(SiteEntity siteEntity, String page) {
-        SiteMap siteMap = new SiteMap(page, siteRepository, pageRepository, siteEntity, true);
+        SiteMap siteMap = new SiteMap(page, siteRepository, siteEntity, true, isIndexingStopped);
         forkJoinPool.invoke(siteMap);
         siteMap.getPages().stream()
                 .filter(pages -> pages.getPath().equals(page))
