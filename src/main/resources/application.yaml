@@ -2,16 +2,16 @@
 
 indexing-settings:
   sites:
-    - url: https://sendel.ru
-      name: Konstantin Shibkov
+#    - url: https://sendel.ru
+#      name: Konstantin Shibkov
 #    - url: https://lenta.ru
 #      name: Лента.ру
 #    - url: https://skillbox.ru
 #      name: Skillbox – образовательная платформа с онлайн-курсами
     - url: https://playback.ru
       name: Интернет-магазин PlayBack.ru
-    - url: https://rostov.store123.ru
-      name: STORE123 - цифровая техника по низким ценам
+#    - url: https://rostov.store123.ru
+#      name: STORE123 - цифровая техника по низким ценам
 #    - url: https://volochek.life
 #      name: Вышний Волочёк
 #    - url: https://www.radiomv.ru
@@ -36,3 +36,9 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+logging:
+  file:
+    name: application.log
+    path: /
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

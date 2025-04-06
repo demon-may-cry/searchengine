@@ -7,7 +7,6 @@ import org.jsoup.select.Elements;
 import searchengine.dto.entity.Page;
 import searchengine.model.SiteEntity;
 import searchengine.model.StatusType;
-import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
 
 import java.io.IOException;
@@ -71,6 +70,7 @@ public class SiteMap extends RecursiveAction {
                 if (currentUrl.contains(uri)
                         && !isFile(currentUrl)
                         && !currentUrl.contains("#")
+                        && !currentUrl.contains(".html/")
                         && !allLinks.contains(currentUrl)) {
                     log.info("Current URL: {}", currentUrl);
 

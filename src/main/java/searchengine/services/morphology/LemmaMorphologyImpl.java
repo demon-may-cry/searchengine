@@ -13,7 +13,7 @@ import java.util.Locale;
 @Slf4j
 @Component
 public class LemmaMorphologyImpl implements LemmaMorphology {
-    private static final String REGEX = "(?<NotCyrillic>[\\p{Punct}\\p{Co}\\p{ASCII}\\p{S}\\p{Lo}’‘№₽©◄«»—|@–…“”„ℹ]+)";
+    private static final String REGEX = "(?<NotCyrillic>[\\p{Punct}\\p{Co}\\p{ASCII}\\p{S}\\p{Lo}’‘№₽©◄«»—|@–…“”„ℹƒµ·ωü]+)";
     private static RussianLuceneMorphology russianLuceneMorphology;
 
     static {

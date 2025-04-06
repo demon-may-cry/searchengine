@@ -139,21 +139,28 @@ public class IndexingServiceImpl implements IndexingService {
     }
 
     private void indexPages(SiteEntity siteEntity) {
-        SiteMap siteMap = new SiteMap(siteEntity.getUrl(), siteRepository, siteEntity, false, isIndexingStopped);
-        forkJoinPool.invoke(siteMap);
-        Set<Page> pages = new CopyOnWriteArraySet<>(siteMap.getPages());
-        Set<PageEntity> pageEntities = pages.stream()
-                .filter(page -> page.getPath().startsWith(siteEntity.getUrl()))
-                .map(page -> {
-                    try {
-                        return createPage(page, siteEntity);
-                    } catch (MalformedURLException e) {
-                        log.error("Failed to create page for {}: {}", page.getPath(), e.getMessage());
-                        return null;
-                    }
-                })
-                .collect(Collectors.toSet());
-        processAndSavePages(pageEntities, siteEntity);
+        try {
+            SiteMap siteMap = new SiteMap(siteEntity.getUrl(), siteRepository, siteEntity, false, isIndexingStopped);
+            forkJoinPool.invoke(siteMap);
+            Set<Page> pages = new CopyOnWriteArraySet<>(siteMap.getPages());
+            Set<PageEntity> pageEntities = pages.stream()
+                    .filter(page -> page.getPath().startsWith(siteEntity.getUrl()))
+                    .map(page -> {
+                        try {
+                            return createPage(page, siteEntity);
+                        } catch (MalformedURLException e) {
+                            log.error("Failed to create page for {}: {}", page.getPath(), e.getMessage());
+                            return null;
+                        }
+                    })
+                    .collect(Collectors.toSet());
+            if (!pageEntities.isEmpty()) {
+                processAndSavePages(pageEntities, siteEntity);
+            }
+        } catch (Exception ex) {
+            log.error("Error during page indexing for site {}: {}", siteEntity.getUrl(), ex.getMessage(), ex);
+        }
+
     }
 
     private void indexSinglePage(SiteEntity siteEntity, String page) {
