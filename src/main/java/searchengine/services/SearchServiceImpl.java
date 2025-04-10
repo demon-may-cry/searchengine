@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import searchengine.dto.search.SearchData;
 import searchengine.dto.search.SearchResponse;
@@ -27,8 +28,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
-    private final static int MIN_FREQUENCY_THRESHOLD = 200;
+    private final static int MIN_FREQUENCY_THRESHOLD = 10;
     private final static int MAX_DISTANCE_BETWEEN_WORDS = 5;
+    private final static int PAGE_NUMBER = 0;
+    private final static int PAGE_SIZE = 10;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final LemmaRepository lemmaRepository;
@@ -251,7 +254,9 @@ public class SearchServiceImpl implements SearchService {
      */
     private List<LemmaEntity> filterLemmasByFrequency(HashMap<String, Integer> lemmaMap) {
         Set<String> allLemmas = lemmaMap.keySet();
-        return lemmaRepository.findByLemmaInAndFrequencyGreaterThanOrderByFrequencyAsc(allLemmas, MIN_FREQUENCY_THRESHOLD);
+        return lemmaRepository.findByLemmaInAndFrequencyGreaterThanOrderByFrequencyAsc(allLemmas,
+                MIN_FREQUENCY_THRESHOLD,
+                PageRequest.of(PAGE_NUMBER, PAGE_SIZE));
     }
 
     /**

@@ -1,5 +1,6 @@
 package searchengine.repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,7 +18,7 @@ import java.util.Set;
 public interface LemmaRepository extends JpaRepository<LemmaEntity, Integer> {
     int countBySiteId(SiteEntity siteEntity);
 
-    List<LemmaEntity> findByLemmaInAndFrequencyGreaterThanOrderByFrequencyAsc(Set<String> lemmas, int threshold);
+    List<LemmaEntity> findByLemmaInAndFrequencyGreaterThanOrderByFrequencyAsc(Set<String> lemmas, int threshold, Pageable pageable);
 
     List<LemmaEntity> findBySiteId(SiteEntity siteId);
 

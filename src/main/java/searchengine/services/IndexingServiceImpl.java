@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class IndexingServiceImpl implements IndexingService {
 
     private static final int BATCH_SIZE = 1000;
+    private static volatile boolean isIndexingStopped = false;
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
     private final LemmaRepository lemmaRepository;
@@ -40,7 +41,6 @@ public class IndexingServiceImpl implements IndexingService {
     private final Object lock = new Object();
     private final List<Thread> indexingThreads;
     private ForkJoinPool forkJoinPool;
-    private static volatile boolean isIndexingStopped = false;
 
     @Override
     public IndexingResponse startIndexing() {
@@ -121,7 +121,6 @@ public class IndexingServiceImpl implements IndexingService {
                 indexingThreads.add(indexingThread);
                 indexingThread.start();
             }
-
             for (Thread thread : indexingThreads) {
                 try {
                     thread.join();
@@ -145,14 +144,7 @@ public class IndexingServiceImpl implements IndexingService {
             Set<Page> pages = new CopyOnWriteArraySet<>(siteMap.getPages());
             Set<PageEntity> pageEntities = pages.stream()
                     .filter(page -> page.getPath().startsWith(siteEntity.getUrl()))
-                    .map(page -> {
-                        try {
-                            return createPage(page, siteEntity);
-                        } catch (MalformedURLException e) {
-                            log.error("Failed to create page for {}: {}", page.getPath(), e.getMessage());
-                            return null;
-                        }
-                    })
+                    .map(page -> createPage(page, siteEntity))
                     .collect(Collectors.toSet());
             if (!pageEntities.isEmpty()) {
                 processAndSavePages(pageEntities, siteEntity);
@@ -169,13 +161,7 @@ public class IndexingServiceImpl implements IndexingService {
         siteMap.getPages().stream()
                 .filter(pages -> pages.getPath().equals(page))
                 .findFirst()
-                .map(pages -> {
-                    try {
-                        return createPage(pages, siteEntity);
-                    } catch (MalformedURLException e) {
-                        throw new RuntimeException(e);
-                    }
-                })
+                .map(pages -> createPage(pages, siteEntity))
                 .ifPresent(pageEntity -> processAndSavePages(Set.of(pageEntity), siteEntity));
         log.info("Page saved in DB: {}", page);
         cleanupAfterParsing();
@@ -190,7 +176,7 @@ public class IndexingServiceImpl implements IndexingService {
         return siteEntity;
     }
 
-    private SiteEntity createSingleSite(String url) throws MalformedURLException {
+    private SiteEntity createSingleSite(String url) {
         String nameSite = null;
         List<Site> siteList = sites.getSites();
         for (var site : siteList) {
@@ -207,7 +193,7 @@ public class IndexingServiceImpl implements IndexingService {
         return siteEntity;
     }
 
-    private PageEntity createPage(Page page, SiteEntity siteEntity) throws MalformedURLException {
+    private PageEntity createPage(Page page, SiteEntity siteEntity) {
         PageEntity pageEntity = new PageEntity();
         pageEntity.setSiteId(siteEntity);
         pageEntity.setContent(page.getContent());
@@ -412,7 +398,7 @@ public class IndexingServiceImpl implements IndexingService {
      * @param url URL-адрес сайта
      * @return boolean
      */
-    private boolean isValidUrl(String url) throws MalformedURLException {
+    private boolean isValidUrl(String url) {
         for (var site : sites.getSites()) {
             if (site.getUrl().equals(getHostName(url))) {
                 return true;
@@ -427,9 +413,14 @@ public class IndexingServiceImpl implements IndexingService {
      * @param url URL-адрес
      * @return <a href="">https://example.com</a>
      */
-    private String getHostName(String url) throws MalformedURLException {
-        URL uri = new URL(url);
-        return uri.getProtocol() + "://" + uri.getHost();
+    private String getHostName(String url) {
+        try {
+            URL uri = new URL(url);
+            return uri.getProtocol() + "://" + uri.getHost();
+        } catch (MalformedURLException ex) {
+            log.error("Error URL: {}", ex.getMessage(), ex);
+            throw new RuntimeException();
+        }
     }
 
     /**
@@ -438,9 +429,14 @@ public class IndexingServiceImpl implements IndexingService {
      * @param url URL-адрес
      * @return /example/372189/.../
      */
-    private String getPathAddress(String url) throws MalformedURLException {
-        URL uri = new URL(url);
-        return uri.getPath();
+    private String getPathAddress(String url) {
+        try {
+            URL uri = new URL(url);
+            return uri.getPath();
+        } catch (MalformedURLException ex) {
+            log.error("Error URL: {}", ex.getMessage(), ex);
+            throw new RuntimeException();
+        }
     }
 
     /**
@@ -485,9 +481,28 @@ public class IndexingServiceImpl implements IndexingService {
      * Сохранение данных в БД порциями
      */
     private <T> void batchSave(List<T> entities, JpaRepository<T, ?> repository) {
-        for (int i = 0; i < entities.size(); i += BATCH_SIZE) {
-            int end = Math.min(i + BATCH_SIZE, entities.size());
-            repository.saveAll(entities.subList(i, end));
+        if (entities == null || entities.isEmpty()) {
+            log.warn("Empty or null list passed to batchSave.");
+            return;
+        }
+
+        List<T> filteredEntities = entities.stream()
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (filteredEntities.isEmpty()) {
+            log.warn("All entities were null — nothing to save.");
+            return;
+        }
+
+        for (int i = 0; i < filteredEntities.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, filteredEntities.size());
+            List<T> batch = filteredEntities.subList(i, end);
+            try {
+                repository.saveAll(batch);
+            } catch (Exception ex) {
+                log.error("Failed to save batch from index {} to {}: {}", i, end, ex.getMessage(), ex);
+            }
         }
     }
 }
